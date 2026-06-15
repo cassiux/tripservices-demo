@@ -16,14 +16,19 @@
  *   PORT          = (set automatically by Railway)
  */
 
-const express = require('express')
-const axios = require('axios')
-const path = require('path')
+import express from 'express'
+import axios from 'axios'
+import { createRequire } from 'module'
+import { fileURLToPath } from 'url'
+import { dirname, join } from 'path'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = dirname(__filename)
 
 const app = express()
 const PORT = process.env.PORT || 3000
 
-// Upstream targets — read from server-side env vars (not VITE_ prefixed)
+// Upstream targets — server-side only, never exposed to the browser
 const AUTH_TARGET = process.env.TP_AUTH_URL || 'https://auth.pp.travelport.net'
 const API_TARGET  = process.env.TP_API_URL  || 'https://api.pp.travelport.net'
 
@@ -35,8 +40,6 @@ app.use(express.urlencoded({ extended: true }))
 // Server forwards to https://auth.pp.travelport.net/oauth/token
 app.post('/tp-auth/oauth/token', async (req, res) => {
   try {
-    // Body arrives as JSON from the browser fetch — convert to form-urlencoded
-    // exactly as the Travelport auth endpoint requires.
     const params = new URLSearchParams()
     const fields = ['grant_type', 'username', 'password', 'client_id', 'client_secret', 'scope']
     fields.forEach(field => {
@@ -59,17 +62,15 @@ app.post('/tp-auth/oauth/token', async (req, res) => {
 
 // ── Proxy: TripServices API ──────────────────────────────────────────────────
 // Browser calls /tp-api/<path> with standard headers
-// Server strips the /tp-api prefix, adds XAUTH header in correct casing,
-// and forwards to https://api.pp.travelport.net/<path>
+// Server strips the /tp-api prefix, re-cases XAUTH header, forwards upstream
 app.all('/tp-api/*', async (req, res) => {
   const upstreamPath = req.path.replace(/^\/tp-api/, '')
   const url = `${API_TARGET}${upstreamPath}`
 
-  // Copy safe headers from the browser request
   const forwardHeaders = {
-    'Content-Type':               req.headers['content-type']               || 'application/json',
-    'Accept':                     req.headers['accept']                     || 'application/json',
-    'Authorization':              req.headers['authorization']              || '',
+    'Content-Type':   req.headers['content-type']  || 'application/json',
+    'Accept':         req.headers['accept']         || 'application/json',
+    'Authorization':  req.headers['authorization']  || '',
     // Re-case the access group header — browsers lowercase custom headers,
     // Travelport gateway is case-sensitive and requires uppercase.
     'XAUTH_TRAVELPORT_ACCESSGROUP': (
@@ -77,9 +78,9 @@ app.all('/tp-api/*', async (req, res) => {
       req.headers['XAUTH_TRAVELPORT_ACCESSGROUP'] ||
       ''
     ),
-    'Accept-Encoding':  'gzip, deflate',
-    'Accept-Version':   req.headers['accept-version']   || '',
-    'Content-Version':  req.headers['content-version']  || '',
+    'Accept-Encoding': 'gzip, deflate',
+    'Accept-Version':  req.headers['accept-version']  || '',
+    'Content-Version': req.headers['content-version'] || '',
   }
 
   // Remove empty headers
@@ -89,16 +90,15 @@ app.all('/tp-api/*', async (req, res) => {
 
   try {
     const response = await axios({
-      method:          req.method,
+      method:         req.method,
       url,
-      headers:         forwardHeaders,
-      data:            req.method !== 'GET' ? req.body : undefined,
-      params:          req.query,
-      decompress:      true,
-      validateStatus:  () => true, // pass all status codes through
+      headers:        forwardHeaders,
+      data:           req.method !== 'GET' ? req.body : undefined,
+      params:         req.query,
+      decompress:     true,
+      validateStatus: () => true,
     })
 
-    // Forward response headers and status
     res.status(response.status)
     if (response.headers['content-type']) {
       res.setHeader('Content-Type', response.headers['content-type'])
@@ -113,13 +113,11 @@ app.all('/tp-api/*', async (req, res) => {
 })
 
 // ── Serve Vite production build ──────────────────────────────────────────────
-// Must come after proxy routes so /tp-auth and /tp-api are intercepted first
-app.use(express.static(path.join(__dirname, 'dist')))
+app.use(express.static(join(__dirname, 'dist')))
 
-// SPA fallback — serve index.html for all non-API routes
-// so React Router handles client-side navigation
+// SPA fallback — all non-API routes serve index.html for React Router
 app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'dist', 'index.html'))
+  res.sendFile(join(__dirname, 'dist', 'index.html'))
 })
 
 app.listen(PORT, () => {
