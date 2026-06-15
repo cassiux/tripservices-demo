@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm --version)",
+      "Bash(git --version)",
+      "Bash(npm install *)",
+      "Bash(npx tsc *)",
+      "Bash(npm ls *)",
+      "Bash(npx vitest *)",
+      "Bash(npm run *)",
+      "Bash(grep -v '^\\\\.$')",
+      "Bash(git check-ignore *)",
+      "Bash(node .verify-token.mjs)",
+      "Bash(node --input-type=module -e ' *)"
+    ]
+  }
+}

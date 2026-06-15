@@ -1,0 +1,36 @@
+{
+  "app": {
+    "name": "Smartpoint Cloud"
+  },
+  "common": {
+    "skipToContent": "Skip to main content"
+  },
+  "topbar": {
+    "logoAlt": "Travelport"
+  },
+  "nav": {
+    "primary": "Primary navigation",
+    "queues": "Queues",
+    "search": "Search",
+    "trips": "Trips",
+    "profiles": "Profiles"
+  },
+  "pages": {
+    "queues": {
+      "title": "Queues",
+      "subtitle": "Your operational hub. Queue management lands here."
+    },
+    "search": {
+      "title": "Search",
+      "subtitle": "Air shopping across EDIFACT, NDC and LCC content lands here."
+    },
+    "trips": {
+      "title": "Trips",
+      "subtitle": "The PNR / Order / Trip workspace lands here."
+    },
+    "profiles": {
+      "title": "Profiles",
+      "subtitle": "Stored traveller profiles land here."
+    }
+  }
+}

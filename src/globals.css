@@ -1,0 +1,95 @@
+/* Inter — loaded via @fontsource (CLAUDE.md: "Load via @fontsource/inter").
+   @import statements must precede all other rules. */
+@import '@fontsource/inter/400.css';
+@import '@fontsource/inter/500.css';
+@import '@fontsource/inter/600.css';
+@import '@fontsource/inter/700.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* =====================================================================
+       SPC design tokens — source of truth from CLAUDE.md Design system.
+       Raw hex CSS variables; consumed by tailwind.config.ts utilities and
+       available directly via var(--color-*).
+       ===================================================================== */
+
+    /* Backgrounds */
+    --color-canvas: #ffffff;
+    --color-surface: #fafafa;
+    --color-hover: #f3f4f6;
+    --color-selected: #ebf0ec;
+    --color-border: #e4e7e5;
+
+    /* Typography */
+    --color-text-primary: #111827;
+    --color-text-secondary: #374151;
+    --color-text-muted: #6b7280;
+    --color-text-subtle: #9ca3af;
+
+    /* Brand green */
+    --color-brand: #4e5d53;
+    --color-brand-pressed: #3a4840;
+    --color-brand-tint: #ebf0ec;
+
+    /* Accent */
+    --color-accent: #ff5e6f;
+    --color-accent-tint: #fef0f1;
+
+    /* Semantic status */
+    --color-confirmed: #edfaed;
+    --color-confirmed-text: #1e7a1e;
+    --color-warning: #fef6e6;
+    --color-warning-text: #b06a00;
+    --color-urgent: #fef0f1;
+    --color-urgent-text: #c8202e;
+
+    /* Content type */
+    --color-ndc: #ebf2fb;
+    --color-ndc-text: #2255a0;
+    --color-edifact: #f3f4f6;
+    --color-edifact-text: #4b5563;
+    --color-lcc: #fef6e6;
+    --color-lcc-text: #b06a00;
+
+    /* =====================================================================
+       shadcn/ui CSS variables — overridden with the SPC palette (HSL).
+       Values from CLAUDE.md "shadcn/ui token overrides". Tokens not listed
+       in CLAUDE.md (card, popover, accent) are added here with neutral SPC
+       values so the owned shadcn components render correctly.
+       ===================================================================== */
+    --background: 0 0% 100%; /* #FFFFFF */
+    --foreground: 220 13% 13%; /* #111827 */
+    --card: 0 0% 100%; /* #FFFFFF — added (not in CLAUDE.md) */
+    --card-foreground: 220 13% 13%; /* #111827 — added */
+    --popover: 0 0% 100%; /* #FFFFFF — added */
+    --popover-foreground: 220 13% 13%; /* #111827 — added */
+    --primary: 150 8% 34%; /* #4E5D53 */
+    --primary-foreground: 0 0% 100%; /* #FFFFFF */
+    --secondary: 150 8% 93%; /* #EBF0EC */
+    --secondary-foreground: 220 13% 13%; /* #111827 */
+    --muted: 220 9% 96%; /* #F3F4F6 */
+    --muted-foreground: 220 9% 46%; /* #6B7280 */
+    --accent: 220 9% 96%; /* #F3F4F6 — added, neutral hover for shadcn internals */
+    --accent-foreground: 220 13% 13%; /* #111827 — added */
+    --destructive: 354 100% 68%; /* #FF5E6F */
+    --destructive-foreground: 0 0% 100%; /* #FFFFFF */
+    --border: 150 8% 89%; /* #E4E7E5 */
+    --input: 150 8% 89%; /* #E4E7E5 */
+    --ring: 150 8% 34%; /* #4E5D53 — focus rings */
+    --radius: 0.375rem; /* 6px — tight, professional */
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-canvas text-foreground font-sans antialiased;
+  }
+}
