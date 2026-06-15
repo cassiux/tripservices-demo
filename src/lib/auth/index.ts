@@ -64,7 +64,7 @@ async function readErrorDetail(response: Response): Promise<string | undefined> 
 }
 
 async function requestToken(): Promise<CachedToken> {
-  const authUrl = '/tp-auth/oauth/token'
+  const authUrl = import.meta.env.VITE_TRIPSERVICES_AUTH_URL
   const clientId = import.meta.env.VITE_TRIPSERVICES_CLIENT_ID
   const clientSecret = import.meta.env.VITE_TRIPSERVICES_CLIENT_SECRET
   const username = import.meta.env.VITE_TRIPSERVICES_USERNAME
