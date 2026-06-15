@@ -44,7 +44,21 @@ Auth token endpoint: `https://auth.pp.travelport.net/oauth/token`
 Base URL: `https://api.pp.travelport.net/`
 Format: REST/JSON throughout. No SOAP, no EDIFACT encoding at the SPC layer.
 
-Auth: OAuth 2.0 client credentials. POST to the token endpoint with your client credentials to obtain a bearer token. Tokens are scoped per agency (MCN/PCC). Token refresh is handled in the shared auth module — do not reimplement per feature.
+Auth: OAuth 2.0 password grant. POST to the token endpoint with all five credential fields (see Environment variables section). Tokens are scoped per user entitlement. Token refresh is handled in the shared auth module — do not reimplement per feature.
+
+**Required headers on every Air API request:**
+
+| Header | Value | Notes |
+|---|---|---|
+| `Authorization` | `Bearer {token}` | From auth module |
+| `XAUTH_TRAVELPORT_ACCESSGROUP` | `{VITE_TRIPSERVICES_ACCESS_GROUP}` | Mandatory — resolves PCC entitlements |
+| `Accept` | `application/json` | Always |
+| `Accept-Encoding` | `gzip, deflate` | Mandatory in production; browser fetch may strip it (handled by proxy) |
+| `Content-Type` | `application/json` | On all POST requests |
+| `Accept-Version` | `11` | Required for Air Search and Air Price |
+| `Content-Version` | `11` | Required for Air Search, Air Price, and all booking/ticketing APIs |
+
+The base client (`src/lib/api/client.ts`) sends all mandatory headers by default. `Accept-Version` and `Content-Version` are passed per-call via the optional `headers` param — do not hardcode them in the base client.
 
 The sandbox mirrors production structure and behaviour. Build with confidence against it. When production credentials are confirmed, only `VITE_TRIPSERVICES_BASE_URL` and `VITE_TRIPSERVICES_AUTH_URL` in `.env.local` need to change — no code changes required.
 
@@ -56,7 +70,7 @@ Do not mock data unless the endpoint is explicitly flagged as not yet available 
 | Domain | Operations |
 |---|---|
 | Trips | GET /trips, GET /trips/{id}, POST /trips, PATCH /trips/{id} |
-| Search | POST /catalog-offerings-query (air shopping) |
+| Air Search | POST /11/air/catalog/search/catalogproductofferings — requires Accept-Version: 11 and Content-Version: 11 headers |
 | Orders | POST /order-create, POST /order-exchange, DELETE /order/{id} |
 | Queues | GET /queues, GET /queues/{id}/entries, POST /queue-place |
 | Seats | POST /seat-availability, POST /seat-assignment |
@@ -150,7 +164,7 @@ Scaffolded on 2026-06-15. The project is initialised and verified (`typecheck`, 
 
 ### Pending manual steps (not done by the scaffold)
 
-- Copy `.env.example` → `.env.local` and fill real TripServices + Okta values.
+- Copy `.env.example` → `.env.local` and fill real TripServices + Okta values. Wrap the password in double quotes and escape `$` as `\$` — see Environment variables section for the exact format.
 - Run `npx playwright install chromium` before the first E2E run (browser binaries are not downloaded).
 - Drop the real Travelport wordmark at `src/assets/travelport-logo.svg` before building the topbar.
 - Install when first needed: Zustand, TanStack Query v5, `react-i18next`, `openapi-typescript`, ESLint/Prettier. Note: `tsc` blocks *implicit* `any`; enforcing the "no `any`" rule against **explicit** `any` requires ESLint (`@typescript-eslint/no-explicit-any`).
@@ -451,14 +465,44 @@ Credentials and environment-specific config live in `.env.local` at the project 
 
 Reference them in code as `import.meta.env.VITE_*`. Vite only exposes variables prefixed with `VITE_` to the client bundle.
 
-**Token flow (verified, pre-production).** `POST {VITE_TRIPSERVICES_AUTH_URL}` with `grant_type=client_credentials` and `client_id`/`client_secret` in the form body returns a `Bearer` token (`expires_in` 86400 = 24h). The trial portal username/password are **not** used for the API token; PCC and access group are agency context sent on API requests, not part of token generation. Security note: in production the token exchange should run server-side (and prod auth is Okta) — a browser call to the auth endpoint also risks CORS — so the sandbox `CLIENT_SECRET` must not ship to real users. In dev, front the token call with a Vite dev-server proxy.
+**Token flow (verified, pre-production).** `POST {VITE_TRIPSERVICES_AUTH_URL}` with a `application/x-www-form-urlencoded` body containing all five fields:
+
+```
+grant_type=password
+username={VITE_TRIPSERVICES_USERNAME}
+password={VITE_TRIPSERVICES_PASSWORD}
+client_id={VITE_TRIPSERVICES_CLIENT_ID}
+client_secret={VITE_TRIPSERVICES_CLIENT_SECRET}
+scope=openid
+```
+
+All six fields are required. `grant_type` must be `password`, not `client_credentials`. Using `client_credentials` issues a token with `aud: https://traefik-pp.edge-dev.tvptcloud.io/` (internal edge) instead of the public API, causing a 401 `1012100 - Credentials invalid or missing` on every subsequent API call despite the token appearing valid.
+
+`scope=openid` is required. Omitting it results in a token with insufficient entitlements for air search.
+
+Returns a `Bearer` token with `scope: "openid profile email address phone"` and `expires_in: 86400` (24h). Cache and reuse — do not request a new token per API call.
+
+**Special characters in password.** The sandbox password contains `$`, `/`, `'`, `{`, `}` and other special characters. In `.env.local`, wrap the value in double quotes and escape the `$` with a backslash to prevent shell/Vite variable interpolation:
+
+```bash
+VITE_TRIPSERVICES_PASSWORD="\$jM/]1M}&}c'wiJn"
+```
+
+Verify it is being read correctly before debugging auth failures: `console.log(import.meta.env.VITE_TRIPSERVICES_PASSWORD?.slice(0, 3))` should print `$jM`. Remove the log immediately after confirming.
+
+Security note: in production the token exchange must run server-side (prod auth is Okta, not the password grant). A browser call to the auth endpoint risks CORS and exposes the client secret and user password. The sandbox credentials must never ship to real users. In dev, front the token call with a Vite dev-server proxy (`/tp-auth/` → `https://auth.pp.travelport.net/`).
+
+**Vite proxy header casing fix.** The browser `fetch` API lowercases all custom header names. The Travelport API gateway is case-sensitive and requires `XAUTH_TRAVELPORT_ACCESSGROUP` in uppercase. The Vite dev-server proxy (`vite.config.ts`) intercepts the request at the Node.js layer and re-cases the header before forwarding. This is handled in the `configure` block of the `/tp-api` proxy entry. Do not remove it.
 
 | Variable | Description |
 |---|---|
 | `VITE_TRIPSERVICES_BASE_URL` | TripServices API base URL. Pre-production: `https://api.pp.travelport.net/` |
 | `VITE_TRIPSERVICES_AUTH_URL` | OAuth token endpoint. Pre-production: `https://auth.pp.travelport.net/oauth/token` |
-| `VITE_TRIPSERVICES_CLIENT_ID` | TripServices API client ID (from sandbox credentials) |
-| `VITE_TRIPSERVICES_CLIENT_SECRET` | TripServices API client secret (from sandbox credentials) |
+| `VITE_TRIPSERVICES_USERNAME` | TripServices API username — required in token request body |
+| `VITE_TRIPSERVICES_PASSWORD` | TripServices API password — required in token request body. Wrap in double quotes in `.env.local` and escape `$` as `\$` |
+| `VITE_TRIPSERVICES_CLIENT_ID` | TripServices OAuth client ID |
+| `VITE_TRIPSERVICES_CLIENT_SECRET` | TripServices OAuth client secret |
+| `VITE_TRIPSERVICES_SCOPE` | OAuth scope. Must be `openid` for sandbox credentials |
 | `VITE_TRIPSERVICES_PCC` | Pseudo City Code — agency context sent on API requests |
 | `VITE_TRIPSERVICES_ACCESS_GROUP` | Access Group GUID — agency context sent on API requests |
 | `VITE_TRIPSERVICES_REGION` | Trial region (e.g. `NORAM`) |
@@ -474,8 +518,11 @@ A `.env.example` file with these variable names and placeholder values should be
 # .env.example — commit this, never the real values
 VITE_TRIPSERVICES_BASE_URL=https://api.pp.travelport.net/
 VITE_TRIPSERVICES_AUTH_URL=https://auth.pp.travelport.net/oauth/token
+VITE_TRIPSERVICES_USERNAME=your-username-here
+VITE_TRIPSERVICES_PASSWORD="your-password-here"
 VITE_TRIPSERVICES_CLIENT_ID=your-client-id-here
 VITE_TRIPSERVICES_CLIENT_SECRET=your-client-secret-here
+VITE_TRIPSERVICES_SCOPE=openid
 VITE_TRIPSERVICES_PCC=your-pcc
 VITE_TRIPSERVICES_ACCESS_GROUP=your-access-group-guid
 VITE_TRIPSERVICES_REGION=NORAM

@@ -6,6 +6,8 @@ interface ImportMetaEnv {
   readonly VITE_TRIPSERVICES_AUTH_URL: string
   readonly VITE_TRIPSERVICES_CLIENT_ID: string
   readonly VITE_TRIPSERVICES_CLIENT_SECRET: string
+  readonly VITE_TRIPSERVICES_USERNAME: string
+  readonly VITE_TRIPSERVICES_PASSWORD: string
   readonly VITE_TRIPSERVICES_PCC: string
   readonly VITE_TRIPSERVICES_ACCESS_GROUP: string
   readonly VITE_TRIPSERVICES_REGION: string

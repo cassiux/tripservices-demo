@@ -5,11 +5,15 @@
 // refreshed silently shortly before it expires. Feature hooks call getAccessToken().
 //
 // Verified flow (pre-production sandbox):
-//   POST {AUTH_URL}  body: grant_type=client_credentials&client_id&client_secret
+//   POST {AUTH_URL}  body: grant_type=password
+//     &username&password&client_id&client_secret&scope=openid
 //   -> 200 { access_token, token_type: "Bearer", expires_in }
 //
-// SECURITY / CORS: in the browser this posts the sandbox client secret to the auth
-// endpoint, which (a) exposes the VITE_-bundled secret and (b) may be blocked by CORS.
+// All four credential fields are required: the portal username/password and the API
+// client_id/client_secret are separate credential pairs from the sandbox provisioning.
+//
+// SECURITY / CORS: in the browser this posts the sandbox credentials to the auth
+// endpoint, which (a) exposes the VITE_-bundled secrets and (b) may be blocked by CORS.
 // In production this exchange must move server-side (production auth is Okta). In dev,
 // front it with a Vite dev-server proxy. The acquisition logic below is unchanged
 // regardless of where it runs.
@@ -60,20 +64,25 @@ async function readErrorDetail(response: Response): Promise<string | undefined> 
 }
 
 async function requestToken(): Promise<CachedToken> {
-  const authUrl = import.meta.env.VITE_TRIPSERVICES_AUTH_URL
+  const authUrl = '/tp-auth/oauth/token'
   const clientId = import.meta.env.VITE_TRIPSERVICES_CLIENT_ID
   const clientSecret = import.meta.env.VITE_TRIPSERVICES_CLIENT_SECRET
+  const username = import.meta.env.VITE_TRIPSERVICES_USERNAME
+  const password = import.meta.env.VITE_TRIPSERVICES_PASSWORD
 
-  if (!authUrl || !clientId || !clientSecret) {
+  if (!authUrl || !clientId || !clientSecret || !username || !password) {
     throw new AuthError(
-      'TripServices OAuth is not configured. Set VITE_TRIPSERVICES_AUTH_URL, VITE_TRIPSERVICES_CLIENT_ID and VITE_TRIPSERVICES_CLIENT_SECRET in .env.local.',
+      'TripServices OAuth is not configured. Set VITE_TRIPSERVICES_AUTH_URL, VITE_TRIPSERVICES_CLIENT_ID, VITE_TRIPSERVICES_CLIENT_SECRET, VITE_TRIPSERVICES_USERNAME and VITE_TRIPSERVICES_PASSWORD in .env.local.',
     )
   }
 
   const body = new URLSearchParams({
-    grant_type: 'client_credentials',
+    grant_type: 'password',
+    username,
+    password,
     client_id: clientId,
     client_secret: clientSecret,
+    scope: 'openid',
   })
 
   let response: Response

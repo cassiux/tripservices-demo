@@ -11,7 +11,16 @@
       "Bash(grep -v '^\\\\.$')",
       "Bash(git check-ignore *)",
       "Bash(node .verify-token.mjs)",
-      "Bash(node --input-type=module -e ' *)"
+      "Bash(node --input-type=module -e ' *)",
+      "Bash(npx prettier *)",
+      "Bash(curl -s -o /dev/null -w \"HTTP %{http_code}\\\\n\" http://localhost:5173/)",
+      "Bash(curl -s http://localhost:5173/)",
+      "Bash(nslookup traefik-pp.edge-dev.tvptcloud.io)",
+      "Bash(curl -s -o /dev/null -w \"connect=%{time_connect} http=%{http_code}\\\\n\" --connect-timeout 5 https://traefik-pp.edge-dev.tvptcloud.io/)",
+      "Bash(echo \"curl exit=$?\")",
+      "Bash(curl -s -o /dev/null -w \"localhost:5173 -> HTTP %{http_code}\\\\n\" http://localhost:5173/)",
+      "Bash(xargs kill)",
+      "Bash(:)"
     ]
   }
 }

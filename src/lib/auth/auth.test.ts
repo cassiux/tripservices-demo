@@ -18,6 +18,8 @@ beforeEach(() => {
   vi.stubEnv('VITE_TRIPSERVICES_AUTH_URL', 'https://auth.example/oauth/token')
   vi.stubEnv('VITE_TRIPSERVICES_CLIENT_ID', 'client-id')
   vi.stubEnv('VITE_TRIPSERVICES_CLIENT_SECRET', 'client-secret')
+  vi.stubEnv('VITE_TRIPSERVICES_USERNAME', 'portal-user')
+  vi.stubEnv('VITE_TRIPSERVICES_PASSWORD', 'portal-pass')
 })
 
 afterEach(() => {
@@ -28,7 +30,7 @@ afterEach(() => {
 })
 
 describe('getAccessToken', () => {
-  it('acquires a token via client-credentials and caches it', async () => {
+  it('acquires a token via the password grant and caches it', async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValue(
@@ -41,7 +43,8 @@ describe('getAccessToken', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1)
 
     const [, init] = fetchMock.mock.calls[0]
-    expect(String(init.body)).toContain('grant_type=client_credentials')
+    expect(String(init.body)).toContain('grant_type=password')
+    expect(String(init.body)).toContain('scope=openid')
   })
 
   it('de-duplicates concurrent acquisitions into a single request', async () => {

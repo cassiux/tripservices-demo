@@ -21,3 +21,15 @@ createRoot(rootElement).render(
     </QueryClientProvider>
   </StrictMode>,
 )
+
+console.log('user:', import.meta.env.VITE_TRIPSERVICES_USERNAME)
+console.log('pw length:', import.meta.env.VITE_TRIPSERVICES_PASSWORD?.length)
+console.log('pw start:', import.meta.env.VITE_TRIPSERVICES_PASSWORD?.slice(0, 3))
+
+console.log({
+  authUrl: import.meta.env.VITE_TRIPSERVICES_AUTH_URL,
+  username: import.meta.env.VITE_TRIPSERVICES_USERNAME,
+  pwLength: import.meta.env.VITE_TRIPSERVICES_PASSWORD?.length,
+  clientId: import.meta.env.VITE_TRIPSERVICES_CLIENT_ID?.slice(0, 4),
+  accessGroup: import.meta.env.VITE_TRIPSERVICES_ACCESS_GROUP?.slice(0, 4),
+})

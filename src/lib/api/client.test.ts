@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { TripServicesApiError, apiFetch } from '@/lib/api/client'
+import { AIR_API_PREFIX, TripServicesApiError, apiFetch } from '@/lib/api/client'
 
 vi.mock('@/lib/auth', () => ({
   getAccessToken: vi.fn().mockResolvedValue('test-token'),
@@ -27,7 +27,7 @@ afterEach(() => {
 })
 
 describe('apiFetch', () => {
-  it('injects auth, PCC and access-group headers and returns parsed JSON', async () => {
+  it('injects auth, agency-context and mandatory transport headers and returns parsed JSON', async () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ ok: true }))
     vi.stubGlobal('fetch', fetchMock)
 
@@ -38,7 +38,41 @@ describe('apiFetch', () => {
     expect(url).toBe('https://api.example/trips/abc')
     expect(init.headers.Authorization).toBe('Bearer test-token')
     expect(init.headers.PCC).toBe('7K9S')
-    expect(init.headers['Access-Group']).toBe('GROUP-GUID')
+    expect(init.headers.XAUTH_TRAVELPORT_ACCESSGROUP).toBe('GROUP-GUID')
+    expect(init.headers.Accept).toBe('application/json')
+    expect(init.headers['Accept-Encoding']).toBe('gzip, deflate')
+  })
+
+  it('sends access-group and Accept-Encoding on an Air call, alongside per-call version headers', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(jsonResponse({ CatalogProductOfferingsResponse: {} }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await apiFetch(`${AIR_API_PREFIX}/catalog/search/catalogproductofferings`, {
+      method: 'POST',
+      body: { CatalogProductOfferingsQueryRequest: {} },
+      headers: { 'Accept-Version': '11', 'Content-Version': '11' },
+    })
+
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(url).toBe('https://api.example/11/air/catalog/search/catalogproductofferings')
+    expect(init.headers.XAUTH_TRAVELPORT_ACCESSGROUP).toBe('GROUP-GUID')
+    expect(init.headers['Accept-Encoding']).toBe('gzip, deflate')
+    expect(init.headers['Accept-Version']).toBe('11')
+    expect(init.headers['Content-Version']).toBe('11')
+  })
+
+  it('resolves a same-origin (dev-proxy) base path against the page origin', async () => {
+    vi.stubEnv('VITE_TRIPSERVICES_BASE_URL', '/tp-api/')
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ ok: true }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await apiFetch('catalog-offerings-query', { method: 'POST', body: {} })
+
+    const [url] = fetchMock.mock.calls[0]
+    expect(url).toMatch(/^https?:\/\//)
+    expect(url).toMatch(/\/tp-api\/catalog-offerings-query$/)
   })
 
   it('serialises a JSON body for non-GET requests', async () => {

@@ -13,6 +13,8 @@ export const ROUTES = {
   SEARCH: '/search',
   TRIPS: '/trips',
   PROFILES: '/profiles',
+  /** Booking flow (feature #4). The Search feature routes here after offer selection. */
+  BOOKING: '/booking',
 } as const
 
 /**
@@ -24,5 +26,6 @@ export const ROUTES = {
  */
 export const TRIPSERVICES_HEADERS = {
   PCC: 'PCC',
-  ACCESS_GROUP: 'Access-Group',
+  /** Agency access-group GUID. TripServices expects this exact header key. */
+  ACCESS_GROUP: 'XAUTH_TRAVELPORT_ACCESSGROUP',
 } as const

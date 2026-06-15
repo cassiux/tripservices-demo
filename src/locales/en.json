@@ -22,7 +22,7 @@
     },
     "search": {
       "title": "Search",
-      "subtitle": "Air shopping across EDIFACT, NDC and LCC content lands here."
+      "subtitle": "Air shopping across EDIFACT, NDC and LCC content."
     },
     "trips": {
       "title": "Trips",
@@ -31,6 +31,119 @@
     "profiles": {
       "title": "Profiles",
       "subtitle": "Stored traveller profiles land here."
+    }
+  },
+  "search": {
+    "page": {
+      "title": "Search",
+      "subtitle": "Air shopping across EDIFACT, NDC and LCC content."
+    },
+    "form": {
+      "tripType": {
+        "label": "Trip type",
+        "oneWay": "One-way",
+        "return": "Return",
+        "multiCity": "Multi-city"
+      },
+      "origin": "Origin",
+      "destination": "Destination",
+      "originPlaceholder": "City or airport",
+      "destinationPlaceholder": "City or airport",
+      "swap": "Swap origin and destination",
+      "departDate": "Departure",
+      "returnDate": "Return",
+      "segmentDate": "Date",
+      "addSegment": "Add flight",
+      "removeSegment": "Remove flight",
+      "passengers": "Passengers",
+      "cabin": {
+        "label": "Cabin",
+        "economy": "Economy",
+        "premiumEconomy": "Premium Economy",
+        "business": "Business",
+        "first": "First"
+      },
+      "fareBasis": {
+        "label": "Fare basis",
+        "optional": "optional",
+        "placeholder": "e.g. YIF"
+      },
+      "submit": "Search",
+      "searching": "Searching…",
+      "pax": {
+        "adult": "Adult",
+        "adultHint": "12+ years",
+        "child": "Child",
+        "childHint": "2–11 years",
+        "infant": "Infant",
+        "infantHint": "Under 2, on lap",
+        "increase": "Add {{type}}",
+        "decrease": "Remove {{type}}",
+        "summary_one": "{{count}} passenger",
+        "summary_other": "{{count}} passengers",
+        "done": "Done"
+      },
+      "errors": {
+        "originRequired": "Select an origin airport.",
+        "destinationRequired": "Select a destination airport.",
+        "sameAirport": "Origin and destination must differ.",
+        "dateRequired": "Select a date.",
+        "returnBeforeDepart": "Return can't be before departure.",
+        "datePast": "Date can't be in the past."
+      }
+    },
+    "airport": {
+      "searching": "Searching airports…",
+      "noResults": "No matching airports"
+    },
+    "recent": {
+      "title": "Recent searches",
+      "clear": "Clear"
+    },
+    "results": {
+      "summary_one": "{{count}} result",
+      "summary_other": "{{count}} results",
+      "sort": {
+        "label": "Sort",
+        "price": "Price",
+        "duration": "Duration",
+        "stops": "Stops",
+        "departure": "Departure"
+      },
+      "nonstop": "Non-stop",
+      "stops_one": "{{count}} stop",
+      "stops_other": "{{count}} stops",
+      "perPassenger": "per passenger",
+      "fareFamilies_one": "{{count}} fare",
+      "fareFamilies_other": "{{count}} fares",
+      "viewFares": "View fares",
+      "hideFares": "Hide fares",
+      "book": "Book",
+      "hold": "Hold",
+      "included": "Included",
+      "excluded": "Not included",
+      "refundable": "Refundable",
+      "nonRefundable": "Non-refundable",
+      "changeable": "Changes allowed",
+      "nonChangeable": "No changes",
+      "loading": "Searching for offers…",
+      "empty": {
+        "title": "No offers found",
+        "body": "Try broadening your search — adjust the dates or cabin, or clear the fare basis filter."
+      },
+      "error": {
+        "title": "Search failed",
+        "retry": "Retry",
+        "generic": "Something went wrong while searching. Please try again."
+      }
+    },
+    "contentType": {
+      "ndc": "NDC",
+      "edifact": "EDIFACT",
+      "lcc": "LCC",
+      "ndcLabel": "NDC content",
+      "edifactLabel": "EDIFACT content",
+      "lccLabel": "Low-cost carrier content"
     }
   }
 }

@@ -19,6 +19,15 @@ export class TripServicesApiError extends Error {
   }
 }
 
+/**
+ * Versioned Air API path prefix. The host comes from VITE_TRIPSERVICES_BASE_URL
+ * (dev proxy `/tp-api/`, pre-production `https://api.pp.travelport.net/`); Air
+ * endpoints are versioned beneath it, resolving to e.g.
+ *   https://api.pp.travelport.net/11/air/catalog/search/catalogproductofferings
+ * Other TripServices domains use their own prefixes, so this is Air-specific.
+ */
+export const AIR_API_PREFIX = '11/air'
+
 type QueryValue = string | number | boolean | undefined | null
 
 export interface ApiRequestOptions {
@@ -38,7 +47,12 @@ function buildUrl(path: string, query?: Record<string, QueryValue>): string {
     )
   }
 
-  const root = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`
+  const trimmed = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`
+  // Support a same-origin base (e.g. the dev-server proxy path "/tp-api/") by
+  // resolving it against the page origin; absolute http(s) bases pass through.
+  const root = /^https?:\/\//i.test(trimmed)
+    ? trimmed
+    : new URL(trimmed, window.location.origin).toString()
   const url = new URL(path.replace(/^\//, ''), root)
 
   if (query) {
@@ -79,8 +93,10 @@ async function parseError(response: Response): Promise<TripServicesApiError> {
 
 /**
  * Typed fetch wrapper for the TripServices API. Resolves the base URL, attaches the
- * bearer token and agency-context headers (PCC, Access Group), serialises JSON bodies,
- * and throws a TripServicesApiError with a meaningful message on failure.
+ * bearer token, agency-context headers (PCC, Access Group) and the mandatory transport
+ * headers (Accept, Accept-Encoding), serialises JSON bodies, and throws a
+ * TripServicesApiError with a meaningful message on failure. Pass `options.headers` to
+ * add per-call headers such as Air's `Accept-Version` / `Content-Version`.
  */
 export async function apiFetch<T>(path: string, options: ApiRequestOptions = {}): Promise<T> {
   const { method = 'GET', body, query, headers: extraHeaders, signal } = options
@@ -91,8 +107,14 @@ export async function apiFetch<T>(path: string, options: ApiRequestOptions = {})
   const headers: Record<string, string> = {
     Authorization: `Bearer ${token}`,
     Accept: 'application/json',
+    // Mandatory for TripServices. NOTE: Accept-Encoding is a forbidden header name in
+    // browsers (the engine manages it), so fetch strips it from direct cross-origin
+    // calls; it is forwarded for real by the dev-server / server-side proxy that fronts
+    // these requests, where the upstream honours it.
+    'Accept-Encoding': 'gzip, deflate',
     [TRIPSERVICES_HEADERS.PCC]: import.meta.env.VITE_TRIPSERVICES_PCC ?? '',
     [TRIPSERVICES_HEADERS.ACCESS_GROUP]: import.meta.env.VITE_TRIPSERVICES_ACCESS_GROUP ?? '',
+    // Per-call overrides (e.g. Air's Accept-Version / Content-Version) win over defaults.
     ...extraHeaders,
   }
 
