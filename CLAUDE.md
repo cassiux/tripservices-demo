@@ -60,24 +60,58 @@ Auth: OAuth 2.0 password grant. POST to the token endpoint with all five credent
 
 The base client (`src/lib/api/client.ts`) sends all mandatory headers by default. `Accept-Version` and `Content-Version` are passed per-call via the optional `headers` param — do not hardcode them in the base client.
 
+**Air Search response structure (verified).** The response is a reference graph, not a flat list. Key structure:
+
+```
+CatalogProductOfferingsResponse
+  CatalogProductOfferings
+    CatalogProductOffering[]        ← one entry per offer (has id, Departure, Arrival, Brand[], ProductBrandOptions[])
+      ProductBrandOptions[]         ← flight option(s) for this offer
+        flightRefs[]                ← IDs pointing to ReferenceListFlight entries
+        ProductBrandOffering[]
+          BestCombinablePrice       ← Base, TotalTaxes, TotalPrice, CurrencyCode.value
+          ContentSource             ← "GDS" | "NDC" | "LCC"
+  ReferenceList[]
+    ReferenceListFlight             ← Flight[] indexed by id (carrier, number, Departure, Arrival, duration)
+    ReferenceListProduct            ← Product[] indexed by id (totalDuration, FlightSegment[], cabin, fareBasisCode)
+    ReferenceListBrand              ← Brand[] indexed by id (name, tier, code, BrandAttribute[], AdditionalBrandAttribute[])
+    ReferenceListTermsAndConditions ← TermsAndConditions[] indexed by id (BaggageAllowance[], Penalties)
+```
+
+Always build ID lookup maps from ReferenceList before processing offers. Never assume data is embedded in the offer object.
+
 The sandbox mirrors production structure and behaviour. Build with confidence against it. When production credentials are confirmed, only `VITE_TRIPSERVICES_BASE_URL` and `VITE_TRIPSERVICES_AUTH_URL` in `.env.local` need to change — no code changes required.
 
-When building any feature that requires data, identify the TripServices endpoint first.
-Do not mock data unless the endpoint is explicitly flagged as not yet available — and flag that clearly in a comment.
+When building any feature that requires data:
+1. Check the endpoint list at https://developer.travelport.com/apis/flights for the correct path
+2. Download the relevant Postman DevKit from https://developer.travelport.com/resources/devkits-and-downloads and inspect the example request and response before writing any code
+3. The response model is reference-based: data objects (flights, brands, terms) live in a ReferenceList and are joined to offer entries by ID references. Build lookup maps first, then resolve.
+4. Do not mock data unless the endpoint is explicitly flagged as not yet available — and flag that clearly in a comment.
 
-### Key endpoint areas (confirm exact paths against OpenAPI spec)
+### Key endpoint areas
 
-| Domain | Operations |
-|---|---|
-| Trips | GET /trips, GET /trips/{id}, POST /trips, PATCH /trips/{id} |
-| Air Search | POST /11/air/catalog/search/catalogproductofferings — requires Accept-Version: 11 and Content-Version: 11 headers |
-| Orders | POST /order-create, POST /order-exchange, DELETE /order/{id} |
-| Queues | GET /queues, GET /queues/{id}/entries, POST /queue-place |
-| Seats | POST /seat-availability, POST /seat-assignment |
-| Ancillaries | POST /ancillary-offers, POST /ancillary-booking |
-| Passengers | POST /passengers, PATCH /passengers/{id} |
-| Profiles | GET /profiles, GET /profiles/{id} |
-| Agencies | GET /agencies/{mcn}, GET /pccs/{pcc} |
+Verified pre-production base paths:
+- Air APIs: `https://api.pp.travelport.net/11/air/`
+- Stays APIs (v11): `https://api.pp.travelport.net/11/hotel/`
+- Pay APIs: `https://api.pp.travelport.net/11/payment/`
+
+Full endpoint lists: https://developer.travelport.com/docs/flights/general/flights-api-endpoints
+
+| Domain | Verified path | Notes |
+|---|---|---|
+| Air Search | POST `11/air/catalog/search/catalogproductofferings` | Verified working. Accept-Version: 11, Content-Version: 11 required. Response is reference-based — flights, brands, products, terms live in ReferenceList and are joined by ID. |
+| Air Price | POST `11/air/catalog/price/catalogproductofferings` | Accept-Version and Content-Version required |
+| Air Book (offer domain) | POST `11/air/book/offers/order` | Content-Version required |
+| Air Book (traveller domain) | POST `11/air/book/travelers` | Content-Version required |
+| Air Ticketing | POST `11/air/ticket/fop` | Content-Version required |
+| Seat map | GET `11/air/book/seats/seatmap` | Content-Version required |
+| Seat assignment | POST `11/air/book/seats` | Content-Version required |
+| Ancillary offers | POST `11/air/ancillaries/offers` | Confirm path against spec |
+| Trips / PNR retrieval | Confirm path against spec | Not yet verified |
+| Queues | Confirm path against spec | Not yet verified |
+| Profiles | Confirm path against spec | Not yet verified |
+
+For any endpoint not marked verified: check https://developer.travelport.com/apis/flights before building. Do not guess paths.
 
 ---
 
@@ -535,11 +569,26 @@ VITE_ENV=development
 
 ### Developer resources
 
-Official documentation and support for TripServices:
+Always check the official documentation before building against a new endpoint. The sandbox mirrors production structure and behaviour exactly.
 
+**Core references:**
 - Developer portal: https://developer.travelport.com/
-- Getting started guide: https://developer.travelport.com/getting-started-guide
-- The sandbox mirrors production. Build against it with confidence — the API structure, authentication flow, and response shapes are identical to production.
+- Authentication (verified, critical reading): https://developer.travelport.com/docs/getting-started/authentication
+- Flights Search Guide (read before building search or price): https://developer.travelport.com/docs/flights/guides/flights-search-guide
+- Flights General Guide (terminology, offer structure, GDS vs NDC): https://developer.travelport.com/docs/flights/guides/flights-general-guide
+- All Flights endpoints: https://developer.travelport.com/docs/flights/general/flights-api-endpoints
+- All Flights headers (required headers per API): https://developer.travelport.com/docs/flights/general/common-flights-api-headers
+- Stays endpoints: https://developer.travelport.com/docs/stays/general/stays-api-endpoints
+- Error messaging: https://developer.travelport.com/docs/flights/general/error-messaging
+- DevKits and Postman collections (download before building a new API area): https://developer.travelport.com/resources/devkits-and-downloads
+
+**Critical lessons learned during SPC build:**
+
+The documentation lists four token fields (username, password, client_id, client_secret) but omits grant_type and scope. The Postman DevKit collection is the authoritative source. Download it before integrating any new API area — it contains pre-wired requests with the correct grant_type, scope, and header values that the documentation does not spell out.
+
+The response model is reference-based, not embedded. In the Air Search response, flights, brands, products, and terms and conditions each have their own array in ReferenceList. Individual offers reference these by ID. Always resolve references through lookup maps rather than expecting data to be embedded in each offer object.
+
+The XAUTH_TRAVELPORT_ACCESSGROUP header must be sent in uppercase. Browser fetch lowercases all custom headers. The Vite dev-server proxy re-cases it at the Node.js layer before forwarding. Do not remove the configure block in vite.config.ts.
 
 ---
 
