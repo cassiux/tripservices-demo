@@ -16,7 +16,8 @@
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "gen:api": "openapi-typescript ./openapi/tripservices.yaml -o src/lib/api/types/tripservices.ts"
+    "gen:api": "openapi-typescript ./openapi/tripservices.yaml -o src/lib/api/types/tripservices.ts",
+    "start": "node server.js"
   },
   "dependencies": {
     "@fontsource/inter": "^5.1.0",
@@ -31,7 +32,9 @@
     "react-i18next": "^17.0.8",
     "react-router-dom": "^7.17.0",
     "tailwind-merge": "^2.6.0",
-    "zustand": "^5.0.14"
+    "zustand": "^5.0.14",
+    "express": "^4.19.2",
+    "axios": "^1.7.2"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
