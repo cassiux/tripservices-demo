@@ -71,12 +71,19 @@ export interface CatalogOfferingsQueryRequest {
 
 const PASSENGER_ORDER: (keyof PassengerCounts)[] = ['ADT', 'CHD', 'INF']
 
-// Carriers provisioned on the sandbox GDS account.
-// NDC and LCC require separate provisioning — do not add here until confirmed.
+// Carriers provisioned on the sandbox GDS (EDIFACT) account.
 const GDS_CARRIERS = [
   'AA', 'AC', 'AS', 'BA', 'BG', 'DL', 'EB', 'GQ', 'IZ',
   'KE', 'KF', 'KG', 'LF', 'LH', 'UA',
 ]
+
+// Carriers provisioned for NDC content on the sandbox. Searched alongside GDS.
+// LCC requires separate provisioning — do not add here until confirmed.
+const NDC_CARRIERS = ['AA', 'UA', 'QF', 'SQ']
+
+// Combined preferred-carrier list for a mixed GDS + NDC search. De-duplicated
+// because AA and UA are provisioned on both content sources.
+const PREFERRED_CARRIERS = [...new Set([...GDS_CARRIERS, ...NDC_CARRIERS])]
 
 /** TripServices expects its own cabin tokens; today they match our enum 1:1. */
 function toApiCabin(cabin: CabinClass): string {
@@ -110,9 +117,14 @@ export function buildCatalogRequest(criteria: SearchCriteria): CatalogOfferingsQ
     CatalogProductOfferingsQueryRequest: {
       CatalogProductOfferingsRequest: {
         '@type': 'CatalogProductOfferingsRequestAir',
-        offersPerPage: 15,
-        // GDS only until NDC and LCC provisioning is confirmed with TripServices team.
-        contentSourceList: ['GDS'],
+        // NDC offerings rank below GDS in the response. With a small page the GDS offerings
+        // fill every slot and NDC never surfaces (verified against the sandbox: at 15 a
+        // mixed search returns 0 NDC; at 50 it returns the full GDS + NDC result set).
+        offersPerPage: 50,
+        // Search GDS (EDIFACT) and NDC content simultaneously. LCC pending provisioning.
+        // Note: `maxNumberOfUpsellsToReturn` is deliberately omitted — it is not supported
+        // for NDC and must not be present in a mixed search.
+        contentSourceList: ['GDS', 'NDC'],
         PassengerCriteria: passengerCriteria,
         SearchCriteriaFlight: flights,
         SearchModifiersAir: {
@@ -124,7 +136,7 @@ export function buildCatalogRequest(criteria: SearchCriteria): CatalogOfferingsQ
           CarrierPreference: [{
             '@type': 'CarrierPreference',
             preferenceType: 'Preferred',
-            carriers: GDS_CARRIERS,
+            carriers: PREFERRED_CARRIERS,
           }],
           ...(fareBasis ? { FareBasisCode: fareBasis } : {}),
         },
@@ -162,23 +174,48 @@ interface RawBestCombinablePrice {
 
 /** Reference to a shared Product in the ReferenceList. */
 interface RawProductRef {
+  '@type'?: string
   productRef?: string
 }
 
-/** Reference to a shared TermsAndConditions entry in the ReferenceList. */
+/**
+ * Reference to a shared TermsAndConditions entry in the ReferenceList. The live API
+ * returns this as a single object with a lowercase `termsAndConditionsRef`; the uppercase
+ * variant is kept for defensiveness against the interim hand-modelled shape.
+ */
 interface RawTermsRef {
+  '@type'?: string
+  termsAndConditionsRef?: string
   TermsAndConditionsRef?: string
+}
+
+/**
+ * NDC-only offer identifier carried on each ProductBrandOffering. Both fields are
+ * required, alongside the full offer id, when calling AirPrice for NDC content.
+ * GDS offers do not carry this block.
+ */
+interface RawIdentifier {
+  '@type'?: string
+  /** Airline authority that issued the offer, e.g. `AA`. */
+  authority?: string
+  /** Encoded, opaque offer value — passed through verbatim to AirPrice. */
+  value?: string
 }
 
 interface RawProductBrandOffering {
   '@type'?: string
+  /** Absent on the live API (GDS `o1`/NDC `AA_CPO0` ids live on the parent offering). */
   id?: string
-  BrandRef?: string
+  /** Live API nests the brand ref in an object; the parent offering also carries it. */
+  Brand?: RawBrandRef
   Product?: RawProductRef[]
   BestCombinablePrice?: RawBestCombinablePrice
   /** `GDS` | `NDC` | `LCC` (anything not NDC/LCC surfaces as EDIFACT). */
   ContentSource?: string
-  TermsAndConditions?: RawTermsRef[]
+  /** Present on NDC offers only; required for the downstream AirPrice call. */
+  Identifier?: RawIdentifier
+  /** Live API returns a single object; an array is tolerated for the interim shape. */
+  TermsAndConditions?: RawTermsRef | RawTermsRef[]
 }
 
 interface RawProductBrandOptions {
@@ -243,7 +280,10 @@ interface RawPassengerFlight {
 
 interface RawFlightSegmentRef {
   '@type'?: string
-  Flight?: { FlightRef?: string }
+  id?: string
+  /** Itinerary order of this segment within the product. */
+  sequence?: number
+  Flight?: { '@type'?: string; FlightRef?: string }
 }
 
 interface RawProduct {
@@ -363,6 +403,18 @@ function toContentType(source: string | undefined): ContentType {
   }
 }
 
+/**
+ * Captures the NDC offer identifier (authority + encoded value) for the downstream
+ * AirPrice call. Returns undefined unless both fields are present — GDS offers carry
+ * no Identifier block, and a partial one is unusable for pricing.
+ */
+function toNdcIdentifier(
+  identifier: RawIdentifier | undefined,
+): { authority: string; value: string } | undefined {
+  if (!identifier?.authority || !identifier.value) return undefined
+  return { authority: identifier.authority, value: identifier.value }
+}
+
 /** Indexes a ReferenceList array by its `id` field, skipping entries without one. */
 function indexById<T extends { id?: string }>(items: T[] | undefined): Map<string, T> {
   const map = new Map<string, T>()
@@ -370,6 +422,12 @@ function indexById<T extends { id?: string }>(items: T[] | undefined): Map<strin
     if (item.id) map.set(item.id, item)
   }
   return map
+}
+
+/** Resolves the TermsAndConditions ref id, tolerating object-or-array and either ref casing. */
+function firstTermsRef(terms: RawTermsRef | RawTermsRef[] | undefined): string | undefined {
+  const entry = Array.isArray(terms) ? terms[0] : terms
+  return entry?.termsAndConditionsRef ?? entry?.TermsAndConditionsRef
 }
 
 /** Finds the single ReferenceList entry of the given discriminator type. */
@@ -523,6 +581,18 @@ function productCabin(product: RawProduct | undefined): string | undefined {
 }
 
 /**
+ * Flight ids from a Product's FlightSegments, in itinerary (sequence) order. NDC offers
+ * leave `ProductBrandOptions.flightRefs` empty and reference their flights here instead,
+ * via the offering's Product. GDS offers populate `flightRefs` directly.
+ */
+function productFlightRefs(product: RawProduct | undefined): string[] {
+  return [...(product?.FlightSegment ?? [])]
+    .sort((a, b) => (a.sequence ?? 0) - (b.sequence ?? 0))
+    .map((segment) => segment.Flight?.FlightRef)
+    .filter((ref): ref is string => Boolean(ref))
+}
+
+/**
  * Builds one FlightOffer per ProductBrandOptions. Multiple options on a single
  * CatalogProductOffering are alternative flights for the same fare family — surfaced
  * as separate, comparable offers (each with a single brand-derived fare family).
@@ -535,16 +605,26 @@ function toOffer(
   fallbackCabin: CabinClass,
   passengerCount: number,
 ): FlightOffer | null {
-  const flights = (options.flightRefs ?? [])
+  const offering0 = options.ProductBrandOffering?.[0]
+  const product = lookups.products.get(offering0?.Product?.[0]?.productRef ?? '')
+
+  // GDS lists its flights on the option (`flightRefs`); NDC leaves that empty and references
+  // them on the offering's Product instead. Fall back to the product path so NDC resolves.
+  const flightRefs =
+    options.flightRefs && options.flightRefs.length > 0
+      ? options.flightRefs
+      : productFlightRefs(product)
+
+  const flights = flightRefs
     .map((ref) => lookups.flights.get(ref))
     .filter((flight): flight is RawFlight => flight !== undefined)
   if (flights.length === 0) return null
 
-  const offering0 = options.ProductBrandOffering?.[0]
   const price = toPrice(offering0?.BestCombinablePrice, passengerCount)
   const contentType = toContentType(offering0?.ContentSource)
+  // NDC offers carry an Identifier required for AirPrice; GDS offers do not.
+  const ndcIdentifier = toNdcIdentifier(offering0?.Identifier)
 
-  const product = lookups.products.get(offering0?.Product?.[0]?.productRef ?? '')
   const cabin = toCabin(productCabin(product), fallbackCabin)
 
   const segments = flights.map((flight) => toSegment(flight, cabin))
@@ -552,7 +632,7 @@ function toOffer(
   const last = segments[segments.length - 1]
 
   const brand = lookups.brands.get(offering.Brand?.[0]?.BrandRef ?? '')
-  const terms = lookups.terms.get(offering0?.TermsAndConditions?.[0]?.TermsAndConditionsRef ?? '')
+  const terms = lookups.terms.get(firstTermsRef(offering0?.TermsAndConditions) ?? '')
   const penalties = toPenalties(terms, price.currency)
 
   const fareFamily: FareFamily = {
@@ -591,6 +671,8 @@ function toOffer(
     price,
     fareFamilies: [fareFamily],
     holdAvailable: false,
+    // Full offer id (e.g. `AA_CPO0`) is preserved above; the prefix is never stripped.
+    ...(ndcIdentifier ? { ndcIdentifier } : {}),
   }
 }
 

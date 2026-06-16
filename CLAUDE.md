@@ -99,7 +99,7 @@ Full endpoint lists: https://developer.travelport.com/docs/flights/general/fligh
 
 | Domain | Verified path | Notes |
 |---|---|---|
-| Air Search | POST `11/air/catalog/search/catalogproductofferings` | Verified working. Accept-Version: 11, Content-Version: 11 required. Response is reference-based — flights, brands, products, terms live in ReferenceList and are joined by ID. |
+| Air Search | POST `11/air/catalog/search/catalogproductofferings` | Verified working for GDS and NDC. Accept-Version: 11, Content-Version: 11 required. Response is reference-based. NDC carriers: AA, UA, QF, SQ. GDS and NDC can be searched simultaneously via `contentSourceList: ["GDS", "NDC"]`. See `docs/api/air-search.md`. |
 | Air Price | POST `11/air/catalog/price/catalogproductofferings` | Accept-Version and Content-Version required |
 | Air Book (offer domain) | POST `11/air/book/offers/order` | Content-Version required |
 | Air Book (traveller domain) | POST `11/air/book/travelers` | Content-Version required |
@@ -400,7 +400,7 @@ Build these feature areas. Each is a separate module in `features/`.
 
 ### 1. Search
 
-Air shopping across EDIFACT, NDC, and LCC content.
+Air shopping across GDS and NDC content. LCC pending separate provisioning.
 
 - One-way, return, multi-city itinerary input
 - Cabin class, passenger count (ADT/CHD/INF), fare basis filter
@@ -409,6 +409,21 @@ Air shopping across EDIFACT, NDC, and LCC content.
 - NDC vs EDIFACT content clearly labelled (agents need to know)
 - Hold/price lock where available
 - Recent searches persisted per agent session
+
+**Content source configuration (verified):**
+
+GDS carriers provisioned: `AA AC AS BA BG DL EB GQ IZ KE KF KG LF LH UA`
+NDC carriers provisioned: `AA UA QF SQ`
+
+Search both simultaneously: `contentSourceList: ["GDS", "NDC"]`
+
+NDC-specific rules (from Postman DevKit — not in official docs):
+- Do not include `maxNumberOfUpsellsToReturn` in NDC requests — it is not supported and will be ignored or cause errors
+- NDC offer IDs carry an airline prefix: `AA_CPO0`, not `o1`. Use the full ID in AirPrice calls.
+- NDC offers include an `Identifier` block (`authority` + encoded `value`) on each `ProductBrandOffering`. Both are required for the AirPrice request. GDS offers do not have this.
+- NDC prices may be returned in the traveller's billing currency, not USD.
+
+See `docs/api/air-search.md` for verified request payloads and full GDS vs NDC response comparison.
 
 ### 2. PNR / Order / Trip display
 
@@ -570,6 +585,9 @@ VITE_ENV=development
 ### Developer resources
 
 Always check the official documentation before building against a new endpoint. The sandbox mirrors production structure and behaviour exactly.
+
+**API reference files in this repo (read before building any feature):**
+- `docs/api/air-search.md` — Verified GDS and NDC search request/response patterns, optional modifiers, carrier lists, and GDS vs NDC response differences
 
 **Core references:**
 - Developer portal: https://developer.travelport.com/

@@ -65,13 +65,34 @@ describe('useSearch', () => {
       expect.anything(),
     )
 
+    // The request shops GDS and NDC content together, with no upsell modifier
+    // (unsupported for NDC) and a de-duplicated preferred-carrier list.
+    const requestBody = postMock.mock.calls[0][1] as Record<string, unknown>
+    const air = (requestBody as {
+      CatalogProductOfferingsQueryRequest: {
+        CatalogProductOfferingsRequest: Record<string, unknown> & {
+          SearchModifiersAir: { CarrierPreference: { carriers: string[] }[] }
+        }
+      }
+    }).CatalogProductOfferingsQueryRequest.CatalogProductOfferingsRequest
+    expect(air.contentSourceList).toEqual(['GDS', 'NDC'])
+    expect(air).not.toHaveProperty('maxNumberOfUpsellsToReturn')
+    // NDC offerings rank below GDS; the page must be large enough to surface them.
+    expect(air.offersPerPage).toBeGreaterThanOrEqual(50)
+    const carriers = air.SearchModifiersAir.CarrierPreference[0].carriers
+    expect(carriers).toEqual([...new Set(carriers)]) // no duplicates
+    expect(carriers).toEqual(expect.arrayContaining(['QF', 'SQ', 'AA', 'UA']))
+
     const offers = result.current.data
     // One FlightOffer per ProductBrandOptions (one each here).
     expect(offers).toHaveLength(2)
 
     const first = offers![0]
-    expect(first.id).toBe('pbo-1')
+    // NDC offer id carries the airline prefix and is never stripped (option index suffixed).
+    expect(first.id).toBe('AA_CPO0-0')
     expect(first.contentType).toBe('NDC')
+    // NDC offers carry an Identifier (authority + encoded value) for AirPrice.
+    expect(first.ndcIdentifier).toEqual({ authority: 'BA', value: 'BA-OFFER-ENC-001' })
     // Resolved from the flight in the ReferenceList (carrier BA == operating BA).
     expect(first.airline).toBe('British Airways')
     expect(first.airlineCode).toBe('BA')
@@ -116,6 +137,8 @@ describe('useSearch', () => {
     // GDS source normalises to EDIFACT content; its first checked bag is included.
     const second = offers![1]
     expect(second.contentType).toBe('EDIFACT')
+    // GDS offers carry no Identifier block.
+    expect(second.ndcIdentifier).toBeUndefined()
     expect(second.airline).toBe('American Airlines')
     expect(second.durationMinutes).toBe(270)
     expect(second.fareFamilies[0].baggage?.firstCheckedBagIncluded).toBe(true)

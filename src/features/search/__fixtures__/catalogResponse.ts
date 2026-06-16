@@ -5,8 +5,12 @@
  * shared entities (flights, products, brands, terms) by id in the ReferenceList,
  * discriminated by `@type`. Two offerings, two flights, two brands.
  *
- *   off-1 → flight f1 (BA 178, NDC), brand b1 (Economy Light), terms t1
- *   off-2 → flight f2 (AA 100, GDS), brand b2 (Main Cabin),     terms t2
+ *   AA_CPO0 → flight f1 (BA 178, NDC, with Identifier), brand b1 (Economy Light), terms t1
+ *   o2      → flight f2 (AA 100, GDS, no Identifier),    brand b2 (Main Cabin),     terms t2
+ *
+ * Shapes mirror the live sandbox: NDC offer ids carry an airline prefix (`AA_CPO0`),
+ * ProductBrandOffering has no `id`, and TermsAndConditions is a single object with a
+ * lowercase `termsAndConditionsRef`.
  */
 
 import type { CatalogOfferingsResponseRaw } from '../searchApi'
@@ -17,29 +21,29 @@ export const catalogResponseFixture: CatalogOfferingsResponseRaw = {
       CatalogProductOffering: [
         {
           '@type': 'CatalogProductOffering',
-          id: 'off-1',
+          id: 'AA_CPO0',
           Departure: 'LHR',
           Arrival: 'JFK',
-          Brand: [{ '@type': 'CatalogProductOfferingBrand', BrandRef: 'b1' }],
+          Brand: [{ '@type': 'BrandID', BrandRef: 'b1' }],
           ProductBrandOptions: [
             {
+              // NDC: no flightRefs here — flights resolve via the Product's FlightSegments.
               '@type': 'ProductBrandOptions',
-              flightRefs: ['f1'],
               ProductBrandOffering: [
                 {
                   '@type': 'ProductBrandOffering',
-                  id: 'pbo-1',
-                  BrandRef: 'b1',
-                  Product: [{ productRef: 'p1' }],
+                  Brand: { '@type': 'BrandID', BrandRef: 'b1' },
+                  Product: [{ '@type': 'ProductID', productRef: 'p1' }],
                   BestCombinablePrice: {
-                    '@type': 'BestCombinablePrice',
+                    '@type': 'BestCombinablePriceDetail',
                     CurrencyCode: { value: 'USD' },
                     Base: 800,
                     TotalTaxes: 200,
                     TotalPrice: 1000,
                   },
                   ContentSource: 'NDC',
-                  TermsAndConditions: [{ TermsAndConditionsRef: 't1' }],
+                  Identifier: { '@type': 'Identifier', authority: 'BA', value: 'BA-OFFER-ENC-001' },
+                  TermsAndConditions: { '@type': 'TermsAndConditionsID', termsAndConditionsRef: 't1' },
                 },
               ],
             },
@@ -47,10 +51,10 @@ export const catalogResponseFixture: CatalogOfferingsResponseRaw = {
         },
         {
           '@type': 'CatalogProductOffering',
-          id: 'off-2',
+          id: 'o2',
           Departure: 'LHR',
           Arrival: 'JFK',
-          Brand: [{ '@type': 'CatalogProductOfferingBrand', BrandRef: 'b2' }],
+          Brand: [{ '@type': 'BrandID', BrandRef: 'b2' }],
           ProductBrandOptions: [
             {
               '@type': 'ProductBrandOptions',
@@ -58,18 +62,17 @@ export const catalogResponseFixture: CatalogOfferingsResponseRaw = {
               ProductBrandOffering: [
                 {
                   '@type': 'ProductBrandOffering',
-                  id: 'pbo-2',
-                  BrandRef: 'b2',
-                  Product: [{ productRef: 'p2' }],
+                  Brand: { '@type': 'BrandID', BrandRef: 'b2' },
+                  Product: [{ '@type': 'ProductID', productRef: 'p2' }],
                   BestCombinablePrice: {
-                    '@type': 'BestCombinablePrice',
+                    '@type': 'BestCombinablePriceDetail',
                     CurrencyCode: { value: 'USD' },
                     Base: 980,
                     TotalTaxes: 220,
                     TotalPrice: 1200,
                   },
                   ContentSource: 'GDS',
-                  TermsAndConditions: [{ TermsAndConditionsRef: 't2' }],
+                  TermsAndConditions: { '@type': 'TermsAndConditionsID', termsAndConditionsRef: 't2' },
                 },
               ],
             },
@@ -114,7 +117,9 @@ export const catalogResponseFixture: CatalogOfferingsResponseRaw = {
             '@type': 'Product',
             id: 'p1',
             totalDuration: 'PT3H',
-            FlightSegment: [{ '@type': 'FlightSegment', Flight: { FlightRef: 'f1' } }],
+            FlightSegment: [
+              { '@type': 'FlightSegment', id: '1', sequence: 1, Flight: { '@type': 'FlightID', FlightRef: 'f1' } },
+            ],
             PassengerFlight: [
               {
                 '@type': 'PassengerFlight',

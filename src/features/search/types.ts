@@ -154,4 +154,10 @@ export interface FlightOffer {
   fareFamilies: FareFamily[]
   /** True when any fare family supports hold / price-lock. */
   holdAvailable: boolean
+  /**
+   * NDC-only identifier (airline authority + encoded value) from the offer's
+   * ProductBrandOffering. Required when calling AirPrice for NDC content; absent
+   * on GDS/EDIFACT offers.
+   */
+  ndcIdentifier?: { authority: string; value: string }
 }
