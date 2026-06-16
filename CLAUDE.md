@@ -67,10 +67,14 @@ CatalogProductOfferingsResponse
   CatalogProductOfferings
     CatalogProductOffering[]        ← one entry per offer (has id, Departure, Arrival, Brand[], ProductBrandOptions[])
       ProductBrandOptions[]         ← flight option(s) for this offer
-        flightRefs[]                ← IDs pointing to ReferenceListFlight entries
+        flightRefs[]                ← GDS only: IDs into ReferenceListFlight. NDC leaves this EMPTY —
+                                       resolve NDC flights via ProductBrandOffering.Product →
+                                       ReferenceListProduct → Product.FlightSegment[].Flight.FlightRef
         ProductBrandOffering[]
           BestCombinablePrice       ← Base, TotalTaxes, TotalPrice, CurrencyCode.value
           ContentSource             ← "GDS" | "NDC" | "LCC"
+          Identifier                ← NDC only: { authority, value } — required for AirPrice
+          TermsAndConditions        ← single object, lowercase `termsAndConditionsRef` (not an array)
   ReferenceList[]
     ReferenceListFlight             ← Flight[] indexed by id (carrier, number, Departure, Arrival, duration)
     ReferenceListProduct            ← Product[] indexed by id (totalDuration, FlightSegment[], cabin, fareBasisCode)
@@ -417,11 +421,13 @@ NDC carriers provisioned: `AA UA QF SQ`
 
 Search both simultaneously: `contentSourceList: ["GDS", "NDC"]`
 
-NDC-specific rules (from Postman DevKit — not in official docs):
+NDC-specific rules (from Postman DevKit + verified against the sandbox — not in official docs):
 - Do not include `maxNumberOfUpsellsToReturn` in NDC requests — it is not supported and will be ignored or cause errors
 - NDC offer IDs carry an airline prefix: `AA_CPO0`, not `o1`. Use the full ID in AirPrice calls.
 - NDC offers include an `Identifier` block (`authority` + encoded `value`) on each `ProductBrandOffering`. Both are required for the AirPrice request. GDS offers do not have this.
 - NDC prices may be returned in the traveller's billing currency, not USD.
+- **`offersPerPage` must be generous for mixed searches.** NDC offerings rank *below* GDS in the response, so a small page (e.g. 15) returns **zero NDC** — GDS fills every slot. SPC sends `offersPerPage: 50` (verified: 15 → 0 NDC, 50 → full GDS + NDC set on LHR→JFK).
+- **NDC leaves `ProductBrandOptions.flightRefs` empty.** GDS lists flights there; NDC references them via `ProductBrandOffering.Product → ReferenceListProduct → Product.FlightSegment[].Flight.FlightRef`. A normaliser that only reads `flightRefs` silently drops every NDC offer. Use the combined (GDS ∪ NDC) carrier list in a single `Preferred` `CarrierPreference`.
 
 See `docs/api/air-search.md` for verified request payloads and full GDS vs NDC response comparison.
 
